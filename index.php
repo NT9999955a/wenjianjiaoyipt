@@ -284,7 +284,7 @@ function handleSign() {
             $user['last_sign'] = $today;
             saveUsers($users);
             
-            $_SESSION['message'] = ['type' => 'success', 'text' => "签到成功！获得{$gold}金币，连续签到{$user['极_days']}天"];
+            $_SESSION['message'] = ['type' => 'success', 'text' => "签到成功！获得{$gold}金币，连续签到{$user['sign_days']}天"];
             return;
         }
     }
@@ -334,7 +334,7 @@ function handleTransfer() {
     foreach ($users as &$user) {
         if ($user['id'] == $_SESSION['user_id']) {
             if ($user['gold'] < $amount) {
-                $_SESSION['message'] = ['极' => 'error', 'text' => '金币不足'];
+                $_SESSION['message'] = ['type' => 'error', 'text' => '金币不足'];
                 return;
             }
             
@@ -518,7 +518,7 @@ function handleCollect() {
     }
     
     $fileId = intval($_POST['file_id'] ?? 0);
-    if ($file极 <= 0) {
+    if ($fileId <= 0) {
         echo json_encode(['success' => false, 'message' => '参数错误']);
         exit;
     }
@@ -1664,7 +1664,7 @@ function generateRandomFileId() {
                 <div id="files-section" class="section active">
                     <h2 class="panel-title">
                         <svg viewBox="0 0 24 24">
-                            <path d="M9,3V18H12V3H9M12,5L16,18L19,17L15,4L12,5M5,5V18H8V5H5M3,19极21H21V19H3Z"/>
+                            <path d="M9,3V18H12V3H9M12,5L16,18L19,17L15,4L12,5M5,5V18H8V5H5M3,19V21H21V19H3Z"/>
                         </svg>
                         文件市场
                     </h2>
@@ -1875,7 +1875,7 @@ function generateRandomFileId() {
                         </div>
                         <h3 style="margin: 20px 0 15px; display: flex; align-items: center; gap: 8px;">
                             <svg class="icon" viewBox="0 0 24 24" style="fill:#4361ee;">
-                                <path d="M15.5,12C18,12 20,14 20,16.5C20,17.38 19.75,18.21 19.31,18.9L22.39,22L21,23.39L17.88,20.32C17.19,20.75 16.37,21 15.5,21C13,21 11,19 11,16.5C11,14 13,12 15.5,12M15.5,14A2.5,2.5 0 0,0 13,16.5A2.5,2.5 0 0,0 15.5,19A2.5,2.5 0 0,0 18,16.5A2.5,2.5 0 0,0 15.5,14M10,4A4,4 0 0,1 14,极C14,8.91 13.69,9.75 13.18,10.43C12.32,10.75 11.55,11.26 10.91,11.9L10,12A4,4 0 0,1 6,8A4,4 0 0,1 10,4M2,20V18C2,15.88 5.31,14.14 9.5,14C9.18,14.78 9,15.62 9,16.5C9,17.79 9.38,19 10,20H2Z"/>
+                                <path d="M15.5,12C18,12 20,14 20,16.5C20,17.38 19.75,18.21 19.31,18.9L22.39,22L21,23.39L17.88,20.32C17.19,20.75 16.37,21 15.5,21C13,21 11,19 11,16.5C11,14 13,12 15.5,12M15.5,14A2.5,2.5 0 0,0 13,16.5A2.5,2.5 0 0,0 15.5,19A2.5,2.5 0 0,0 18,16.5A2.5,2.5 0 0,0 15.5,14M10,4A4,4 0 0,1 14,8C14,8.91 13.69,9.75 13.18,10.43C12.32,10.75 11.55,11.26 10.91,11.9L10,12A4,4 0 0,1 6,8A4,4 0 0,1 10,4M2,20V18C2,15.88 5.31,14.14 9.5,14C9.18,14.78 9,15.62 9,16.5C9,17.79 9.38,19 10,20H2Z"/>
                             </svg>
                             修改密码
                         </h3>
@@ -1995,7 +1995,7 @@ function generateRandomFileId() {
                                         </div>
                                         <div>
                                             <svg class="icon" viewBox="0 0 24 24">
-                                                <path d="M5,20H19V极H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+                                                <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
                                             </svg>
                                             下载: <?php echo $file['downloads']; ?>次
                                         </div>
@@ -2123,7 +2123,7 @@ function generateRandomFileId() {
                                             <div class="action-btn collect-btn collected" 
                                                 onclick="collectFile(<?php echo $file['id']; ?>)">
                                                 <svg viewBox="0 0 24 24">
-                                                    <path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.极,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z"/>
+                                                    <path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z"/>
                                                 </svg>
                                                 <?php echo $file['collections']; ?>
                                             </div>
@@ -2149,7 +2149,7 @@ function generateRandomFileId() {
                             <?php else: ?>
                                 <div class="empty-state">
                                     <svg viewBox="0 0 24 24">
-                                        <path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35M12,13A3,3 0 0,0 15,10A3,3 0 0,0 12,7A3,3 0 0,0 9,10A3,3 0 0,极 12,13Z"/>
+                                        <path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35M12,13A3,3 0 0,0 15,10A3,3 0 0,0 12,7A3,3 0 0,0 9,10A3,3 0 0,0 12,13Z"/>
                                     </svg>
                                     <h3>暂无收藏</h3>
                                     <p>您还没有收藏任何文件</p>
