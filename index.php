@@ -10,12 +10,14 @@ define('USER_FILE', 'data/users.json');
 define('FILE_FILE', 'data/files.json');
 define('UPLOAD_DIR', 'uploads/');
 define('CHUNK_SIZE', 990 * 1024); // 990KB
+define('TOKEN_FILE', 'data/tokens.json'); // 令牌存储文件
 
 // 初始化目录和文件
 if (!file_exists('data')) mkdir('data');
 if (!file_exists(UPLOAD_DIR)) mkdir(UPLOAD_DIR);
 if (!file_exists(USER_FILE)) file_put_contents(USER_FILE, '[]');
 if (!file_exists(FILE_FILE)) file_put_contents(FILE_FILE, '[]');
+if (!file_exists(TOKEN_FILE)) file_put_contents(TOKEN_FILE, '[]'); // 初始化令牌文件
 
 // 加载用户数据
 function loadUsers() {
@@ -37,6 +39,17 @@ function loadFiles() {
 // 保存文件数据
 function saveFiles($files) {
     file_put_contents(FILE_FILE, json_encode($files, JSON_PRETTY_PRINT));
+}
+
+// 加载令牌数据
+function loadTokens() {
+    $tokens = json_decode(file_get_contents(TOKEN_FILE), true) ?: [];
+    return $tokens;
+}
+
+// 保存令牌数据
+function saveTokens($tokens) {
+    file_put_contents(TOKEN_FILE, json_encode($tokens, JSON_PRETTY_PRINT));
 }
 
 // 生成用户ID
@@ -658,7 +671,7 @@ function handleBuy() {
     exit;
 }
 
-// 生成下载链接处理
+// 生成下载链接处理 - 重构版
 function handleGenerateDownload() {
     if (!isset($_SESSION['user_id'])) {
         echo json_encode(['success' => false, 'message' => '请先登录']);
@@ -700,20 +713,20 @@ function handleGenerateDownload() {
         exit;
     }
     
-    // 生成临时下载令牌（有效时间10分钟）
-    $token = md5($fileId . $_SESSION['user_id'] . time());
-    $_SESSION['download_token'] = $token;
-    $_SESSION['download_file'] = $file['path'];
-    $_SESSION['download_time'] = time();
+    // 生成唯一下载令牌
+    $token = md5(uniqid(mt_rand(), true));
     
-    // 更新下载次数
-    foreach ($files as &$f) {
-        if ($f['id'] == $fileId) {
-            $f['downloads']++;
-            saveFiles($files);
-            break;
-        }
-    }
+    // 加载现有令牌
+    $tokens = loadTokens();
+    
+    // 存储令牌信息（包含文件路径和初始计数）
+    $tokens[$token] = [
+        'file_path' => $file['path'],
+        'created_at' => time(),
+        'download_count' => 0
+    ];
+    
+    saveTokens($tokens);
     
     $downloadUrl = "index.php?action=download&token={$token}";
     
@@ -721,7 +734,7 @@ function handleGenerateDownload() {
     exit;
 }
 
-// 下载处理
+// 下载处理 - 完全重构
 if (isset($_GET['action']) && $_GET['action'] === 'download') {
     $token = $_GET['token'] ?? '';
     
@@ -729,23 +742,40 @@ if (isset($_GET['action']) && $_GET['action'] === 'download') {
         die('无效的下载请求');
     }
     
-    if (!isset($_SESSION['download_token']) || $_SESSION['download_token'] !== $token) {
-        die('下载令牌无效');
+    // 加载令牌数据
+    $tokens = loadTokens();
+    
+    // 检查令牌是否存在
+    if (!isset($tokens[$token])) {
+        die('下载令牌无效或已过期');
     }
     
+    $tokenData = $tokens[$token];
+    $filePath = $tokenData['file_path'];
+    
     // 检查令牌有效期（10分钟）
-    if (time() - $_SESSION['download_time'] > 600) {
-        unset($_SESSION['download_token'], $_SESSION['download_file'], $_SESSION['download_time']);
+    if (time() - $tokenData['created_at'] > 600) {
+        unset($tokens[$token]);
+        saveTokens($tokens);
         die('下载链接已过期');
     }
     
-    $filePath = $_SESSION['download_file'];
+    // 检查下载次数（≤4次）
+    if ($tokenData['download_count'] >= 4) {
+        unset($tokens[$token]);
+        saveTokens($tokens);
+        die('下载次数超过限制');
+    }
+    
+    // 增加下载计数
+    $tokens[$token]['download_count']++;
+    saveTokens($tokens);
     
     if (!file_exists($filePath)) {
         die('文件不存在');
     }
     
-    // 准备下载
+    // 准备下载 - 正确设置HTTP头
     header('Content-Description: File Transfer');
     header('Content-Type: application/octet-stream');
     header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
@@ -759,8 +789,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'download') {
     flush();
     readfile($filePath);
     
-    // 清理会话变量
-    unset($_SESSION['download_token'], $_SESSION['download_file'], $_SESSION['download_time']);
+    // 更新文件下载次数
+    $files = loadFiles();
+    foreach ($files as &$file) {
+        if ($file['path'] === $filePath) {
+            $file['downloads']++;
+            saveFiles($files);
+            break;
+        }
+    }
     exit;
 }
 
@@ -1510,7 +1547,7 @@ function generateRandomFileId() {
                         </div>
                         <a href="#" onclick="showSection('profile')" class="btn">
                             <svg viewBox="0 0 24 24">
-                                <path d="M12,19.2C9.5,19.2 7.29,17.92 6,16C6.03,14 10,12.9 12,12.9C14,12.9 17.97,14 18,16C16.71,17.92 14.5,19.2 12,19.2M12,5A3,3 0 0,1 15,8A3,3 0 0,1 12,11A3,3 0 0,1 9,8A3,3 0 0,1 12,5M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12C22,6.47 17.5,2 12,2Z"/>
+                                <path d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z"/>
                             </svg>
                             <?php echo htmlspecialchars($user['username']); ?>
                         </a>
@@ -1560,7 +1597,7 @@ function generateRandomFileId() {
                     </div>
                     <div class="menu-item" onclick="showSection('upload')">
                         <svg viewBox="0 0 24 24">
-                            <path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/>
+                            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
                         </svg>
                         上传文件
                     </div>
@@ -1711,7 +1748,7 @@ function generateRandomFileId() {
                         <?php else: ?>
                             <div class="empty-state">
                                 <svg viewBox="0 0 24 24">
-                                    <path d="M14,2H6C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M13,10V11H14V10H13M13,12V13H14V12H13M13,14V15H15V14H13M13,16V17H16V16H13Z"/>
+                                    <path d="M14,2H6C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
                                 </svg>
                                 <h3>暂无文件</h3>
                                 <p>当前没有任何文件可供交易</p>
@@ -1724,7 +1761,7 @@ function generateRandomFileId() {
                 <div id="upload-section" class="section hidden">
                     <h2 class="panel-title">
                         <svg viewBox="0 0 24 24">
-                            <path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/>
+                            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
                         </svg>
                         上传文件
                     </h2>
@@ -1744,7 +1781,7 @@ function generateRandomFileId() {
                         <input type="hidden" id="file-id" value="<?php echo generateRandomFileId(); ?>">
                         <button type="button" class="btn btn-primary" onclick="startUpload()">
                             <svg viewBox="0 0 24 24">
-                                <path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/>
+                                <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
                             </svg>
                             开始上传
                         </button>
@@ -1814,7 +1851,7 @@ function generateRandomFileId() {
                         </div>
                         <h3 style="margin: 20px 0 15px; display: flex; align-items: center; gap: 8px;">
                             <svg class="icon" viewBox="0 0 24 24" style="fill:#4361ee;">
-                                <path d="M12,15.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
+                                <path d="M15.5,12C18,12 20,14 20,16.5C20,17.38 19.75,18.21 19.31,18.9L22.39,22L21,23.39L17.88,20.32C17.19,20.75 16.37,21 15.5,21C13,21 11,19 11,16.5C11,14 13,12 15.5,12M15.5,14A2.5,2.5 0 0,0 13,16.5A2.5,2.5 0 0,0 15.5,19A2.5,2.5 0 0,0 18,16.5A2.5,2.5 0 0,0 15.5,14M10,4A4,4 0 0,1 14,8C14,8.91 13.69,9.75 13.18,10.43C12.32,10.75 11.55,11.26 10.91,11.9L10,12A4,4 0 0,1 6,8A4,4 0 0,1 10,4M2,20V18C2,15.88 5.31,14.14 9.5,14C9.18,14.78 9,15.62 9,16.5C9,17.79 9.38,19 10,20H2Z"/>
                             </svg>
                             修改密码
                         </h3>
@@ -1865,7 +1902,7 @@ function generateRandomFileId() {
                         <div class="form-group">
                             <label for="amount">
                                 <svg viewBox="0 0 24 24" style="width:20px;height:20px;vertical-align:middle;margin-right:8px;fill:#4361ee;">
-                                    <path d="M15,14C12.33,14 7,15.33 7,18V20H23V18C23,15.33 17.67,14 15,14M6,10V7H4V10H1V12H4V15H6V12H9V10M15,12A4,4 0 0,0 19,8A4,4 0 0,0 15,4A4,4 0 0,0 11,8A4,4 0 0,0 15,12Z"/>
+                                    <path d="M12,15.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
                                 </svg>
                                 转账金额
                             </label>
@@ -2130,7 +2167,7 @@ function generateRandomFileId() {
                         </div>
                         <button type="submit" class="btn btn-primary">
                             <svg viewBox="0 0 24 24">
-                                <path d="M10,17V14H3V10H10V7L15,12L10,17M10,2H19A2,2 0 0,1 21,4V20A2,2 0 0,1 19,22H10A2,2 0 0,1 8,20V18H10V20H19V4H10V6H8V4A2,2 0 0,1 10,2Z"/>
+                                <path d="M10,17V14H3V10H10V7L15,12L10,17M10,2H19A2,2 0 0,1 21,4V20A2,2 极 0,1 19,22H10A2,2 0 0,1 8,20V18H10V20H19V4H10V6H8极4A2,2 0 0,1 10,2Z"/>
                             </svg>
                             登录
                         </button>
@@ -2143,13 +2180,13 @@ function generateRandomFileId() {
                 <div id="register-section" class="section hidden">
                     <h2 class="panel-title">
                         <svg viewBox="0 0 24 24">
-                            <path d="M15,14C12.33,14 7,15.33 7,18V20H23V18C23,15.33 17.67,14 15,14M6,10V7H4V10H1V12H4V15H6V12H9V10M15,12A4,4 0 0,0 19,8A4,4 0 0,0 15,4A4,4 0 0,0 11,8A4,4 0 0,0 15,12Z"/>
+                            <path d="M15,14C12.33,14 7,15.33 极,18V20H23V18C23,15.33 17.67,14 15,14M6,10V7H4V10H1V12H4V15H6V12H9V10M15,12A4,4 0 0,0 19,8A4,4 0 0,0 15,4A4,4 0 0,0 11,8A4,4 0 0,0 15,12Z"/>
                         </svg>
                         用户注册
                     </h2>
                     <form method="post">
                         <input type="hidden" name="action" value="register">
-                        <div class="form-group">
+                        <极 class="form-group">
                             <label for="register-username">用户名</label>
                             <input type="text" name="username" id="register-username" required>
                         </div>
@@ -2305,7 +2342,7 @@ function generateRandomFileId() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const btn = document.querySelector(`.file-card[data-id="${fileId}"] .collect-btn`);
+                    const btn = document.querySelector(`.极-card[data-id="${fileId}"] .collect-btn`);
                     const collections = btn.textContent.match(/\d+/);
                     let count = collections ? parseInt(collections[0]) : 0;
                     
